@@ -8,5 +8,12 @@ output: github_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(readr)
 ```
 
+### Problem 2
+```{r}
+urlfile = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
+homi = read_csv(url(urlfile))
+```
+The raw data contains `r nrow(homi)` observations of `r ncol(homi)` variables, the names of the variable are `r names(homi)`.
