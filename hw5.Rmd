@@ -1,0 +1,12 @@
+---
+title: "qz2493_datasci_hw5"
+author: "Qingyue Zhuo qz2493"
+date: "2022-11-13"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
