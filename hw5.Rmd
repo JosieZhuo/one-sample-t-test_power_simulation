@@ -12,8 +12,38 @@ library(readr)
 ```
 
 ### Problem 2
+#### Import Data
 ```{r}
 urlfile = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
 homi = read_csv(url(urlfile))
 ```
 The raw data contains `r nrow(homi)` observations of `r ncol(homi)` variables, the names of the variable are `r names(homi)`.
+
+#### Create a New Variable
+```{r}
+homi = homi %>%
+  mutate(city_state = paste(city,state,sep = ","))
+```
+
+#### Summary within Cities
+```{r}
+homi %>%
+  group_by(city_state, disposition) %>% 
+  summarize(n = n()) %>%
+  pivot_wider(names_from = disposition, values_from = n) %>%
+  select(-"Closed by arrest") %>%
+  rename(
+    "Total Number of Homicides" = "Closed without arrest",
+    "Number of Unsolved Homicides" = "Open/No arrest"
+    ) %>%
+  knitr::kable() #How to deal with NAs
+```
+
+#### Estimation of the Proportion of Homicides Unsolved
+```{r}
+prop_baltimore = prop.test(x = 152, n = 1673, p = NULL)
+broom::tidy(prop_baltimore) %>%
+  select(1,5,6)
+```
+The estimated proportion is 0.0909, and the 95% confidence interval is [0.0777, 0.106].
+
