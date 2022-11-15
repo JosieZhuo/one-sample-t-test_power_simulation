@@ -9,6 +9,7 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(readr)
+library(ggplot2)
 ```
 
 ### Problem 2
@@ -62,7 +63,6 @@ The estimated proportion is `r esti_and_CI_baltimore[[1]]`, the 95% confidence i
 #### Iterate over Cities
   - define a function to generate estimated proportion and CI for each city
 ```{r}
-
 esti_and_CI = function(x,n){
   prop_test_result = prop.test(x,n)
   broom::tidy(prop_test_result) %>%
@@ -77,20 +77,51 @@ esti_and_CI = function(x,n){
 
   - build a tibble to store the result
 ```{r}
-#build a tibble
 homi_df = 
   tibble(
     name = homi_table$city_state,
     samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
     samp2 = as.list(homi_table$`Total Number of Homicides`),
-    summary = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y))
+    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[1]]),
+    conf_int = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[2]])
     ) %>%
-  select(name, summary)
+  select(name, esti_p, conf_int)
 homi_df
 unnest(homi_df)
 ```
 
+  - plot
+```{r}
+#define a new function to separate the upper and lower limit of CIs
+esti_and_CI_plot = function(x,n){
+  prop_test_result = prop.test(x,n)
+  broom::tidy(prop_test_result) %>%
+    select(1,5,6) %>%
+    mutate(
+    conf.low = round(conf.low,3),
+    conf.high = round(conf.high,3),
+    estimate = round(estimate, 3)) %>%
+  select(estimate, conf.low, conf.high)}
 
+#store the estimated_portion, upper and lower limit in a new tibble
+homi_df_plot = 
+  tibble(
+    name = homi_table$city_state,
+    samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
+    samp2 = as.list(homi_table$`Total Number of Homicides`),
+    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[1]]),
+    conf_low = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[2]]),
+    conf_high = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[3]])
+    ) %>%
+  select(name, esti_p, conf_low, conf_high)
+```
+
+```{r}
+ggplot(unnest(homi_df_plot), aes(x = reorder(name,esti_p), y = esti_p)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high))
+```
 
 
 

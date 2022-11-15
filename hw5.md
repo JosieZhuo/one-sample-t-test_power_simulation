@@ -149,31 +149,31 @@ esti_and_CI = function(x,n){
 -   build a tibble to store the result
 
 ``` r
-#build a tibble
 homi_df = 
   tibble(
     name = homi_table$city_state,
     samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
     samp2 = as.list(homi_table$`Total Number of Homicides`),
-    summary = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y))
+    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[1]]),
+    conf_int = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[2]])
     ) %>%
-  select(name, summary)
+  select(name, esti_p, conf_int)
 homi_df
 ```
 
-    ## # A tibble: 45 × 2
-    ##    name           summary         
-    ##    <chr>          <list>          
-    ##  1 Albuquerque,NM <tibble [1 × 2]>
-    ##  2 Atlanta,GA     <tibble [1 × 2]>
-    ##  3 Baltimore,MD   <tibble [1 × 2]>
-    ##  4 Baton Rouge,LA <tibble [1 × 2]>
-    ##  5 Birmingham,AL  <tibble [1 × 2]>
-    ##  6 Buffalo,NY     <tibble [1 × 2]>
-    ##  7 Charlotte,NC   <tibble [1 × 2]>
-    ##  8 Chicago,IL     <tibble [1 × 2]>
-    ##  9 Cincinnati,OH  <tibble [1 × 2]>
-    ## 10 Columbus,OH    <tibble [1 × 2]>
+    ## # A tibble: 45 × 3
+    ##    name           esti_p    conf_int 
+    ##    <chr>          <list>    <list>   
+    ##  1 Albuquerque,NM <dbl [1]> <chr [1]>
+    ##  2 Atlanta,GA     <dbl [1]> <chr [1]>
+    ##  3 Baltimore,MD   <dbl [1]> <chr [1]>
+    ##  4 Baton Rouge,LA <dbl [1]> <chr [1]>
+    ##  5 Birmingham,AL  <dbl [1]> <chr [1]>
+    ##  6 Buffalo,NY     <dbl [1]> <chr [1]>
+    ##  7 Charlotte,NC   <dbl [1]> <chr [1]>
+    ##  8 Chicago,IL     <dbl [1]> <chr [1]>
+    ##  9 Cincinnati,OH  <dbl [1]> <chr [1]>
+    ## 10 Columbus,OH    <dbl [1]> <chr [1]>
     ## # … with 35 more rows
 
 ``` r
@@ -181,19 +181,58 @@ unnest(homi_df)
 ```
 
     ## Warning: `cols` is now required when using unnest().
-    ## Please use `cols = c(summary)`
+    ## Please use `cols = c(esti_p, conf_int)`
 
     ## # A tibble: 45 × 3
-    ##    name           estimate CI             
-    ##    <chr>             <dbl> <chr>          
-    ##  1 Albuquerque,NM    0.553 [ 0.447,0.655 ]
-    ##  2 Atlanta,GA        0.184 [ 0.144,0.232 ]
-    ##  3 Baltimore,MD      0.091 [ 0.078,0.106 ]
-    ##  4 Baton Rouge,LA    0.089 [ 0.053,0.143 ]
-    ##  5 Birmingham,AL     0.226 [ 0.18,0.28 ]  
-    ##  6 Buffalo,NY        0.026 [ 0.012,0.052 ]
-    ##  7 Charlotte,NC      0.272 [ 0.206,0.348 ]
-    ##  8 Chicago,IL        0.105 [ 0.095,0.115 ]
-    ##  9 Cincinnati,OH     0.188 [ 0.144,0.242 ]
-    ## 10 Columbus,OH       0.162 [ 0.131,0.198 ]
+    ##    name           esti_p conf_int       
+    ##    <chr>           <dbl> <chr>          
+    ##  1 Albuquerque,NM  0.553 [ 0.447,0.655 ]
+    ##  2 Atlanta,GA      0.184 [ 0.144,0.232 ]
+    ##  3 Baltimore,MD    0.091 [ 0.078,0.106 ]
+    ##  4 Baton Rouge,LA  0.089 [ 0.053,0.143 ]
+    ##  5 Birmingham,AL   0.226 [ 0.18,0.28 ]  
+    ##  6 Buffalo,NY      0.026 [ 0.012,0.052 ]
+    ##  7 Charlotte,NC    0.272 [ 0.206,0.348 ]
+    ##  8 Chicago,IL      0.105 [ 0.095,0.115 ]
+    ##  9 Cincinnati,OH   0.188 [ 0.144,0.242 ]
+    ## 10 Columbus,OH     0.162 [ 0.131,0.198 ]
     ## # … with 35 more rows
+
+-   plot
+
+``` r
+#define a new function to separate the upper and lower limit of CIs
+esti_and_CI_plot = function(x,n){
+  prop_test_result = prop.test(x,n)
+  broom::tidy(prop_test_result) %>%
+    select(1,5,6) %>%
+    mutate(
+    conf.low = round(conf.low,3),
+    conf.high = round(conf.high,3),
+    estimate = round(estimate, 3)) %>%
+  select(estimate, conf.low, conf.high)}
+
+#store the estimated_portion, upper and lower limit in a new tibble
+homi_df_plot = 
+  tibble(
+    name = homi_table$city_state,
+    samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
+    samp2 = as.list(homi_table$`Total Number of Homicides`),
+    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[1]]),
+    conf_low = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[2]]),
+    conf_high = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[3]])
+    ) %>%
+  select(name, esti_p, conf_low, conf_high)
+```
+
+``` r
+ggplot(unnest(homi_df_plot), aes(x = reorder(name,esti_p), y = esti_p)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high))
+```
+
+    ## Warning: `cols` is now required when using unnest().
+    ## Please use `cols = c(esti_p, conf_low, conf_high)`
+
+![](hw5_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
