@@ -27,23 +27,70 @@ homi = homi %>%
 
 #### Summary within Cities
 ```{r}
-homi %>%
+homi_table = 
+  homi %>%
   group_by(city_state, disposition) %>% 
   summarize(n = n()) %>%
   pivot_wider(names_from = disposition, values_from = n) %>%
   select(-"Closed by arrest") %>%
   rename(
-    "Total Number of Homicides" = "Closed without arrest",
-    "Number of Unsolved Homicides" = "Open/No arrest"
+    "Total Number of Homicides" = "Open/No arrest",
+    "Number of Unsolved Homicides" = "Closed without arrest"
     ) %>%
-  knitr::kable() #How to deal with NAs
+  drop_na()
+  
+knitr::kable(homi_table) #How to deal with NAs
 ```
 
 #### Estimation of the Proportion of Homicides Unsolved
 ```{r}
-prop_baltimore = prop.test(x = 152, n = 1673, p = NULL)
-broom::tidy(prop_baltimore) %>%
-  select(1,5,6)
+prop_baltimore = prop.test(x = 152, n = 1673)
+
+esti_and_CI_baltimore = 
+  broom::tidy(prop_baltimore) %>%
+  select(1,5,6) %>%
+  mutate(
+    CI = paste(round(conf.low,3), round(conf.high, 3), sep = ","),
+    CI = paste("[", CI, "]"),
+    estimate = round(estimate, 3)) %>%
+  select(estimate, CI) 
+
+esti_and_CI_baltimore 
 ```
-The estimated proportion is 0.0909, and the 95% confidence interval is [0.0777, 0.106].
+The estimated proportion is `r esti_and_CI_baltimore[[1]]`, the 95% confidence interval is [`r esti_and_CI_baltimore[[2]]`].
+
+#### Iterate over Cities
+  - define a function to generate estimated proportion and CI for each city
+```{r}
+
+esti_and_CI = function(x,n){
+  prop_test_result = prop.test(x,n)
+  broom::tidy(prop_test_result) %>%
+    select(1,5,6) %>%
+    mutate(
+    CI = paste(round(conf.low,3), round(conf.high, 3), sep = ","),
+    CI = paste("[", CI, "]"),
+    estimate = round(estimate, 3)) %>%
+  select(estimate, CI)
+}
+```
+
+  - build a tibble to store the result
+```{r}
+#build a tibble
+homi_df = 
+  tibble(
+    name = homi_table$city_state,
+    samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
+    samp2 = as.list(homi_table$`Total Number of Homicides`),
+    summary = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y))
+    ) %>%
+  select(name, summary)
+homi_df
+unnest(homi_df)
+```
+
+
+
+
 
