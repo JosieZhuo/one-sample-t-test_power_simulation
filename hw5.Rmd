@@ -58,7 +58,7 @@ esti_and_CI_baltimore =
 
 esti_and_CI_baltimore 
 ```
-The estimated proportion is `r esti_and_CI_baltimore[[1]]`, the 95% confidence interval is [`r esti_and_CI_baltimore[[2]]`].
+The estimated proportion is `r esti_and_CI_baltimore[[1]]`, the 95% confidence interval is `r esti_and_CI_baltimore[[2]]`.
 
 #### Iterate over Cities
   - define a function to generate estimated proportion and CI for each city
@@ -117,11 +117,73 @@ homi_df_plot =
 ```
 
 ```{r}
+# generate the plot
 ggplot(unnest(homi_df_plot), aes(x = reorder(name,esti_p), y = esti_p)) +
   geom_point() +
   theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
   geom_errorbar(aes(ymin = conf_low, ymax = conf_high))
 ```
 
+### Problem 3
+#### Set design elements
+```{r}
+sim_muhat_pval = function(samp_size = 30, mu, sigma = 5) {
+  
+  sim_data = tibble(
+    x = rnorm(n = samp_size, mean = mu, sd = sigma),
+    )
+  
+  sim_data %>% 
+    t.test(conf.level = 0.95) %>%
+    broom::tidy() %>%
+    select(1,3)}
+```
 
+```{r}
+sim_results_df = 
+  expand_grid(
+    mean_null = 0,
+    iter = 1:1000
+  ) %>% 
+  mutate(
+    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+  ) %>% 
+  unnest(estimate_df)
+
+sim_results_df
+```
+
+```{r}
+sim_results_df2 = 
+  expand_grid(
+    mean_null = c(1,2,3,4,5,6),
+    iter = 1:1000
+  ) %>% 
+  mutate(
+    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+  ) %>% 
+  unnest(estimate_df)
+sim_results_df2
+```
+
+```{r}
+prop= function(mean_input) {
+  sim_data = 
+    sim_results_df2 %>%
+    filter(mean_null == mean_input)
+  length(sim_data$p.value[sim_data$p.value < 0.05])/1000
+}
+
+plot1 = 
+  unnest(tibble( mean_input = c(1,2,3,4,5,6), prop = map(c(1,2,3,4,5,6), prop))) %>%
+  ggplot(aes(x = mean_input, y = prop)) + geom_point()
+
+plot1
+```
+
+```{r}
+
+ggplot(sim_results_df2, aes(x = mean_null, y = estimate)) +
+  geom_point()
+```
 

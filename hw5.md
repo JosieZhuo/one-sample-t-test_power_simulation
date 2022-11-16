@@ -125,8 +125,8 @@ esti_and_CI_baltimore
     ##      <dbl> <chr>          
     ## 1    0.091 [ 0.078,0.106 ]
 
-The estimated proportion is 0.091, the 95% confidence interval is \[\[
-0.078,0.106 \]\].
+The estimated proportion is 0.091, the 95% confidence interval is \[
+0.078,0.106 \].
 
 #### Iterate over Cities
 
@@ -226,6 +226,7 @@ homi_df_plot =
 ```
 
 ``` r
+# generate the plot
 ggplot(unnest(homi_df_plot), aes(x = reorder(name,esti_p), y = esti_p)) +
   geom_point() +
   theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
@@ -236,3 +237,60 @@ ggplot(unnest(homi_df_plot), aes(x = reorder(name,esti_p), y = esti_p)) +
     ## Please use `cols = c(esti_p, conf_low, conf_high)`
 
 ![](hw5_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+### Problem 3
+
+#### Set design elements
+
+``` r
+sim_muhat_pval = function(samp_size = 30, mu, sigma = 5) {
+  
+  sim_data = tibble(
+    x = rnorm(n = samp_size, mean = mu, sd = sigma),
+    )
+  
+  sim_data %>% 
+    t.test(conf.level = 0.95) %>%
+    broom::tidy() %>%
+    select(1,3)}
+```
+
+``` r
+sim_results_df = 
+  expand_grid(
+    mean_null = 0,
+    iter = 1:1000
+  ) %>% 
+  mutate(
+    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+  ) %>% 
+  unnest(estimate_df)
+```
+
+``` r
+sim_results_df2 = 
+  expand_grid(
+    mean_null = c(1,2,3,4,5,6),
+    iter = 1:1000
+  ) %>% 
+  mutate(
+    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+  ) %>% 
+  unnest(estimate_df)
+```
+
+``` r
+prop = function(mean_input) {
+  sim_data = 
+    sim_results_df2 %>%
+    filter(mean_null == mean_input)
+  length(sim_data$p.value[sim_data$p.value < 0.05])/1000
+}
+
+x_y = 
+  unnest(tibble( mean_input = c(1,2,3,4,5,6), prop = map(c(1,2,3,4,5,6), prop))) %>%
+  ggplot(aes(x = mean_input, y = prop)) + geom_point()
+```
+
+    ## Warning: `cols` is now required when using unnest().
+    ## Please use `cols = c(prop)`
