@@ -8,8 +8,7 @@ Qingyue Zhuo qz2493
 #### Import Data
 
 ``` r
-urlfile = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
-homi = read_csv(url(urlfile))
+homi = read_csv("C:/Users/HW/Desktop/courses/fall 2022/data science/hw/hw5/homicide-data.csv")
 ```
 
     ## Rows: 52179 Columns: 12
@@ -25,11 +24,12 @@ The raw data contains 52179 observations of 12 variables, the names of
 the variable are uid, reported_date, victim_last, victim_first,
 victim_race, victim_age, victim_sex, city, state, lat, lon, disposition.
 
-#### Create a New Variable
+#### Create “city_state” variable
 
 ``` r
 homi = homi %>%
-  mutate(city_state = paste(city,state,sep = ","))
+  janitor::clean_names() %>%
+  mutate(city_state = str_c(city, state, sep = ","))
 ```
 
 #### Summary within Cities
@@ -37,260 +37,335 @@ homi = homi %>%
 ``` r
 homi_table = 
   homi %>%
-  group_by(city_state, disposition) %>% 
-  summarize(n = n()) %>%
-  pivot_wider(names_from = disposition, values_from = n) %>%
-  select(-"Closed by arrest") %>%
-  rename(
-    "Total Number of Homicides" = "Open/No arrest",
-    "Number of Unsolved Homicides" = "Closed without arrest"
-    ) %>%
-  drop_na()
+  mutate(result = case_when(
+      disposition == "Closed without arrest" ~ "unsolved",
+      disposition == "Open/No arrest"        ~ "unsolved",
+      disposition == "Closed by arrest"      ~ "solved"
+  )) %>% 
+  group_by(city_state) %>% 
+  summarize(n = n(),
+            unsolved = sum(result == "unsolved")) %>%
+  filter(city_state != "Tulsa,AL")
+
+knitr::kable(homi_table)
 ```
 
-    ## `summarise()` has grouped output by 'city_state'. You can override using the
-    ## `.groups` argument.
+| city_state        |    n | unsolved |
+|:------------------|-----:|---------:|
+| Albuquerque,NM    |  378 |      146 |
+| Atlanta,GA        |  973 |      373 |
+| Baltimore,MD      | 2827 |     1825 |
+| Baton Rouge,LA    |  424 |      196 |
+| Birmingham,AL     |  800 |      347 |
+| Boston,MA         |  614 |      310 |
+| Buffalo,NY        |  521 |      319 |
+| Charlotte,NC      |  687 |      206 |
+| Chicago,IL        | 5535 |     4073 |
+| Cincinnati,OH     |  694 |      309 |
+| Columbus,OH       | 1084 |      575 |
+| Dallas,TX         | 1567 |      754 |
+| Denver,CO         |  312 |      169 |
+| Detroit,MI        | 2519 |     1482 |
+| Durham,NC         |  276 |      101 |
+| Fort Worth,TX     |  549 |      255 |
+| Fresno,CA         |  487 |      169 |
+| Houston,TX        | 2942 |     1493 |
+| Indianapolis,IN   | 1322 |      594 |
+| Jacksonville,FL   | 1168 |      597 |
+| Kansas City,MO    | 1190 |      486 |
+| Las Vegas,NV      | 1381 |      572 |
+| Long Beach,CA     |  378 |      156 |
+| Los Angeles,CA    | 2257 |     1106 |
+| Louisville,KY     |  576 |      261 |
+| Memphis,TN        | 1514 |      483 |
+| Miami,FL          |  744 |      450 |
+| Milwaukee,wI      | 1115 |      403 |
+| Minneapolis,MN    |  366 |      187 |
+| Nashville,TN      |  767 |      278 |
+| New Orleans,LA    | 1434 |      930 |
+| New York,NY       |  627 |      243 |
+| Oakland,CA        |  947 |      508 |
+| Oklahoma City,OK  |  672 |      326 |
+| Omaha,NE          |  409 |      169 |
+| Philadelphia,PA   | 3037 |     1360 |
+| Phoenix,AZ        |  914 |      504 |
+| Pittsburgh,PA     |  631 |      337 |
+| Richmond,VA       |  429 |      113 |
+| Sacramento,CA     |  376 |      139 |
+| San Antonio,TX    |  833 |      357 |
+| San Bernardino,CA |  275 |      170 |
+| San Diego,CA      |  461 |      175 |
+| San Francisco,CA  |  663 |      336 |
+| Savannah,GA       |  246 |      115 |
+| St. Louis,MO      | 1677 |      905 |
+| Stockton,CA       |  444 |      266 |
+| Tampa,FL          |  208 |       95 |
+| Tulsa,OK          |  583 |      193 |
+| Washington,DC     | 1345 |      589 |
+
+#### Proportion Test of Baltimore
 
 ``` r
-knitr::kable(homi_table) #How to deal with NAs
+baltimore_df =
+  homi_table %>%
+  filter(city_state == "Baltimore,MD")
+
+baltimore_test = 
+  prop.test(
+    x = baltimore_df %>% pull(unsolved), 
+    n = baltimore_df %>% pull(n)) %>%
+  broom::tidy()
+
+baltimore_test %>% select(estimate, starts_with("conf"))
 ```
 
-| city_state        | Number of Unsolved Homicides | Total Number of Homicides |
-|:------------------|-----------------------------:|--------------------------:|
-| Albuquerque,NM    |                           52 |                        94 |
-| Atlanta,GA        |                           58 |                       315 |
-| Baltimore,MD      |                          152 |                      1673 |
-| Baton Rouge,LA    |                           16 |                       180 |
-| Birmingham,AL     |                           64 |                       283 |
-| Buffalo,NY        |                            8 |                       311 |
-| Charlotte,NC      |                           44 |                       162 |
-| Chicago,IL        |                          387 |                      3686 |
-| Cincinnati,OH     |                           49 |                       260 |
-| Columbus,OH       |                           80 |                       495 |
-| Dallas,TX         |                           78 |                       676 |
-| Denver,CO         |                           46 |                       123 |
-| Detroit,MI        |                           16 |                      1466 |
-| Durham,NC         |                           11 |                        90 |
-| Fort Worth,TX     |                           35 |                       220 |
-| Fresno,CA         |                           23 |                       146 |
-| Houston,TX        |                          346 |                      1147 |
-| Indianapolis,IN   |                          102 |                       492 |
-| Jacksonville,FL   |                          141 |                       456 |
-| Kansas City,MO    |                           36 |                       450 |
-| Las Vegas,NV      |                          175 |                       397 |
-| Long Beach,CA     |                           27 |                       129 |
-| Memphis,TN        |                           50 |                       433 |
-| Miami,FL          |                           63 |                       387 |
-| Milwaukee,wI      |                           37 |                       366 |
-| Minneapolis,MN    |                           31 |                       156 |
-| Nashville,TN      |                           57 |                       221 |
-| New Orleans,LA    |                           98 |                       832 |
-| New York,NY       |                           17 |                       226 |
-| Oklahoma City,OK  |                           11 |                       315 |
-| Omaha,NE          |                           10 |                       159 |
-| Philadelphia,PA   |                           92 |                      1268 |
-| Phoenix,AZ        |                           96 |                       408 |
-| Richmond,VA       |                           20 |                        93 |
-| Sacramento,CA     |                           23 |                       116 |
-| San Antonio,TX    |                           87 |                       270 |
-| San Bernardino,CA |                           19 |                       151 |
-| San Diego,CA      |                           64 |                       111 |
-| San Francisco,CA  |                            1 |                       335 |
-| Savannah,GA       |                           12 |                       103 |
-| St. Louis,MO      |                           40 |                       865 |
-| Stockton,CA       |                           11 |                       255 |
-| Tampa,FL          |                            8 |                        87 |
-| Tulsa,OK          |                           55 |                       138 |
-| Washington,DC     |                           74 |                       515 |
+    ## # A tibble: 1 × 3
+    ##   estimate conf.low conf.high
+    ##      <dbl>    <dbl>     <dbl>
+    ## 1    0.646    0.628     0.663
 
-#### Estimation of the Proportion of Homicides Unsolved
+The estimated proportion is 0.6455607, the 95% confidence interval is
+\[0.6275625, 0.6631599\].
+
+#### Proportion Test across Cities
+
+-   Define a function
 
 ``` r
-prop_baltimore = prop.test(x = 152, n = 1673)
-
-esti_and_CI_baltimore = 
-  broom::tidy(prop_baltimore) %>%
-  select(1,5,6) %>%
-  mutate(
-    CI = paste(round(conf.low,3), round(conf.high, 3), sep = ","),
-    CI = paste("[", CI, "]"),
-    estimate = round(estimate, 3)) %>%
-  select(estimate, CI) 
-
-esti_and_CI_baltimore 
-```
-
-    ## # A tibble: 1 × 2
-    ##   estimate CI             
-    ##      <dbl> <chr>          
-    ## 1    0.091 [ 0.078,0.106 ]
-
-The estimated proportion is 0.091, the 95% confidence interval is \[
-0.078,0.106 \].
-
-#### Iterate over Cities
-
--   define a function to generate estimated proportion and CI for each
-    city
-
-``` r
-esti_and_CI = function(x,n){
-  prop_test_result = prop.test(x,n)
+city_test = function(x,n){
+  prop.test(x,n) %>%
   broom::tidy(prop_test_result) %>%
-    select(1,5,6) %>%
-    mutate(
-    CI = paste(round(conf.low,3), round(conf.high, 3), sep = ","),
-    CI = paste("[", CI, "]"),
-    estimate = round(estimate, 3)) %>%
-  select(estimate, CI)
-}
+    select(estimate, starts_with("conf"))}
 ```
 
--   build a tibble to store the result
+-   Iterate over each city
 
 ``` r
-homi_df = 
-  tibble(
-    name = homi_table$city_state,
-    samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
-    samp2 = as.list(homi_table$`Total Number of Homicides`),
-    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[1]]),
-    conf_int = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[2]])
-    ) %>%
-  select(name, esti_p, conf_int)
-homi_df
-```
-
-    ## # A tibble: 45 × 3
-    ##    name           esti_p    conf_int 
-    ##    <chr>          <list>    <list>   
-    ##  1 Albuquerque,NM <dbl [1]> <chr [1]>
-    ##  2 Atlanta,GA     <dbl [1]> <chr [1]>
-    ##  3 Baltimore,MD   <dbl [1]> <chr [1]>
-    ##  4 Baton Rouge,LA <dbl [1]> <chr [1]>
-    ##  5 Birmingham,AL  <dbl [1]> <chr [1]>
-    ##  6 Buffalo,NY     <dbl [1]> <chr [1]>
-    ##  7 Charlotte,NC   <dbl [1]> <chr [1]>
-    ##  8 Chicago,IL     <dbl [1]> <chr [1]>
-    ##  9 Cincinnati,OH  <dbl [1]> <chr [1]>
-    ## 10 Columbus,OH    <dbl [1]> <chr [1]>
-    ## # … with 35 more rows
-
-``` r
-unnest(homi_df)
+result_df = 
+  homi_table %>% 
+  mutate(summary = map2(as.list(homi_table$unsolved), as.list(homi_table$n), city_test)) %>%
+  select(city_state, summary) %>%
+  unnest()
 ```
 
     ## Warning: `cols` is now required when using unnest().
-    ## Please use `cols = c(esti_p, conf_int)`
+    ## Please use `cols = c(summary)`
 
-    ## # A tibble: 45 × 3
-    ##    name           esti_p conf_int       
-    ##    <chr>           <dbl> <chr>          
-    ##  1 Albuquerque,NM  0.553 [ 0.447,0.655 ]
-    ##  2 Atlanta,GA      0.184 [ 0.144,0.232 ]
-    ##  3 Baltimore,MD    0.091 [ 0.078,0.106 ]
-    ##  4 Baton Rouge,LA  0.089 [ 0.053,0.143 ]
-    ##  5 Birmingham,AL   0.226 [ 0.18,0.28 ]  
-    ##  6 Buffalo,NY      0.026 [ 0.012,0.052 ]
-    ##  7 Charlotte,NC    0.272 [ 0.206,0.348 ]
-    ##  8 Chicago,IL      0.105 [ 0.095,0.115 ]
-    ##  9 Cincinnati,OH   0.188 [ 0.144,0.242 ]
-    ## 10 Columbus,OH     0.162 [ 0.131,0.198 ]
-    ## # … with 35 more rows
+``` r
+result_df
+```
+
+    ## # A tibble: 50 × 4
+    ##    city_state     estimate conf.low conf.high
+    ##    <chr>             <dbl>    <dbl>     <dbl>
+    ##  1 Albuquerque,NM    0.386    0.337     0.438
+    ##  2 Atlanta,GA        0.383    0.353     0.415
+    ##  3 Baltimore,MD      0.646    0.628     0.663
+    ##  4 Baton Rouge,LA    0.462    0.414     0.511
+    ##  5 Birmingham,AL     0.434    0.399     0.469
+    ##  6 Boston,MA         0.505    0.465     0.545
+    ##  7 Buffalo,NY        0.612    0.569     0.654
+    ##  8 Charlotte,NC      0.300    0.266     0.336
+    ##  9 Chicago,IL        0.736    0.724     0.747
+    ## 10 Cincinnati,OH     0.445    0.408     0.483
+    ## # … with 40 more rows
 
 -   plot
 
 ``` r
-#define a new function to separate the upper and lower limit of CIs
-esti_and_CI_plot = function(x,n){
-  prop_test_result = prop.test(x,n)
-  broom::tidy(prop_test_result) %>%
-    select(1,5,6) %>%
-    mutate(
-    conf.low = round(conf.low,3),
-    conf.high = round(conf.high,3),
-    estimate = round(estimate, 3)) %>%
-  select(estimate, conf.low, conf.high)}
-
-#store the estimated_portion, upper and lower limit in a new tibble
-homi_df_plot = 
-  tibble(
-    name = homi_table$city_state,
-    samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
-    samp2 = as.list(homi_table$`Total Number of Homicides`),
-    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[1]]),
-    conf_low = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[2]]),
-    conf_high = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[3]])
-    ) %>%
-  select(name, esti_p, conf_low, conf_high)
-```
-
-``` r
-# generate the plot
-ggplot(unnest(homi_df_plot), aes(x = reorder(name,esti_p), y = esti_p)) +
+ggplot(result_df, aes(x = reorder(city_state, estimate), y = estimate)) +
   geom_point() +
   theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
-  geom_errorbar(aes(ymin = conf_low, ymax = conf_high))
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  xlab("Estimated Proportion") +
+  ylab("Confidence Interval")
 ```
 
-    ## Warning: `cols` is now required when using unnest().
-    ## Please use `cols = c(esti_p, conf_low, conf_high)`
-
-![](hw5_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](hw5_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 ### Problem 3
 
-#### Set design elements
+#### Generate function that returns mu_hat and p.value
 
 ``` r
-sim_muhat_pval = function(samp_size = 30, mu, sigma = 5) {
-  
+sim_mu_pval = function(samp_size = 30, mu, sigma = 5) {
   sim_data = tibble(
-    x = rnorm(n = samp_size, mean = mu, sd = sigma),
-    )
-  
+    x = rnorm(n = samp_size, mean = mu, sd = sigma),)
   sim_data %>% 
     t.test(conf.level = 0.95) %>%
     broom::tidy() %>%
-    select(1,3)}
+    select(estimate, p.value)}
 ```
+
+#### Simulation of “mu = 0”
 
 ``` r
 sim_results_df = 
   expand_grid(
     mean_null = 0,
-    iter = 1:1000
-  ) %>% 
+    iter = 1:5000) %>% 
   mutate(
-    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+    estimate_df = map(.x = mean_null, ~sim_mu_pval(mu = .x))
   ) %>% 
   unnest(estimate_df)
+
+sim_results_df
 ```
 
+    ## # A tibble: 5,000 × 4
+    ##    mean_null  iter estimate p.value
+    ##        <dbl> <int>    <dbl>   <dbl>
+    ##  1         0     1  -0.437  0.656  
+    ##  2         0     2  -0.815  0.411  
+    ##  3         0     3   0.377  0.679  
+    ##  4         0     4  -0.564  0.629  
+    ##  5         0     5  -0.248  0.834  
+    ##  6         0     6  -0.895  0.329  
+    ##  7         0     7   0.245  0.798  
+    ##  8         0     8  -2.87   0.00455
+    ##  9         0     9  -0.0959 0.909  
+    ## 10         0    10   0.158  0.860  
+    ## # … with 4,990 more rows
+
+#### Simulation of “mu = {1,2,3,4,5,6}”
+
 ``` r
+mu_true = c(1,2,3,4,5,6)
+
 sim_results_df2 = 
   expand_grid(
-    mean_null = c(1,2,3,4,5,6),
-    iter = 1:1000
+    mean_null = mu_true,
+    iter = 1:5000
   ) %>% 
   mutate(
-    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+    estimate_df = map(.x = mean_null, ~sim_mu_pval(mu = .x))
   ) %>% 
   unnest(estimate_df)
+
+sim_results_df2
 ```
+
+    ## # A tibble: 30,000 × 4
+    ##    mean_null  iter estimate p.value
+    ##        <dbl> <int>    <dbl>   <dbl>
+    ##  1         1     1    1.61  0.0562 
+    ##  2         1     2    2.09  0.0284 
+    ##  3         1     3    2.47  0.00800
+    ##  4         1     4    0.438 0.552  
+    ##  5         1     5    0.265 0.713  
+    ##  6         1     6    2.06  0.00678
+    ##  7         1     7    0.462 0.645  
+    ##  8         1     8    0.861 0.311  
+    ##  9         1     9    1.55  0.115  
+    ## 10         1    10    0.261 0.762  
+    ## # … with 29,990 more rows
+
+#### Plot showing the proportion of times rejected & mean of estimate
+
+-   Function that calculates the “rejection proportion”
 
 ``` r
 prop = function(mean_input) {
   sim_data = 
     sim_results_df2 %>%
     filter(mean_null == mean_input)
-  length(sim_data$p.value[sim_data$p.value < 0.05])/1000
+  length(sim_data$p.value[sim_data$p.value < 0.05])/5000
 }
+```
 
-x_y = 
-  unnest(tibble( mean_input = c(1,2,3,4,5,6), prop = map(c(1,2,3,4,5,6), prop))) %>%
-  ggplot(aes(x = mean_input, y = prop)) + geom_point()
+-   Plot
+
+``` r
+plot1 = 
+  unnest(tibble( mu_true, prop = map(mu_true, prop))) %>%
+  ggplot(aes(x = mu_true , y = prop)) + 
+  geom_point(size = 3, color = "red") +
+  labs(
+    x = "true mu",
+    y = "proportion of rejected",
+    title = "The Proportion of Times Rejectect across True mu"
+  )
 ```
 
     ## Warning: `cols` is now required when using unnest().
     ## Please use `cols = c(prop)`
+
+``` r
+plot1
+```
+
+![](hw5_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+
+-   Description:
+    -   There is a positive relationship between effect size and power.
+    -   The power is approximately equal to one when mu is 4, 5, or 6,
+        suggesting the null was almost rejected 100% of times.
+
+#### Plot showing the average estimate of mu_hat
+
+-   Function that calculates the average estimates for the whole sample
+
+``` r
+esti = function(mean_input) {
+  sim_data = 
+    sim_results_df2 %>%
+    filter(mean_null == mean_input)
+  mean(sim_data$estimate)
+}
+```
+
+-   Sample for which the null was rejected
+
+``` r
+samp_rej = 
+  sim_results_df2 %>%
+  filter(p.value < 0.05)
+```
+
+-   Function that calculates the average estimates for the sample
+    rejected
+
+``` r
+esti2 = function(mean_input) {
+  sim_data = 
+    samp_rej %>%
+    filter(mean_null == mean_input)
+  mean(sim_data$estimate) }
+```
+
+-   Plot2
+
+``` r
+plot2 = 
+  unnest(tibble(mean_input = mu_true, esti1 = map(mu_true, esti), esti2 = map(mu_true, esti2))) %>% 
+  ggplot(aes(x = mean_input, y = esti1)) + 
+  geom_point(color = "steelblue", size = 3, alpha = 0.7) +
+  geom_point(aes(x = mean_input, y = esti2), color = "red", size = 3, alpha = 0.7) +
+  labs(
+    x = "true mu",
+    y = "average of estimated mu",
+    title = "Average of Estimated mu across True mu"
+  )
+```
+
+    ## Warning: `cols` is now required when using unnest().
+    ## Please use `cols = c(esti1, esti2)`
+
+``` r
+plot2
+```
+
+![](hw5_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+
+-   Description:
+    -   The average mu_hat for “rejected samples” is somehow greater
+        than true mu, while the two almost equal when true mean is 4, 5
+        or 6.
+    -   When true mu is 4, 5, or 6: the power is approximately equal to
+        1, which means almost all samples are rejected(correctly),
+        suggesting average estimate of rejected samples is extremely
+        close to the true mean;
+    -   When true mu is 1, 2, or 3: the power is observably smaller
+        than 1. The estimated values should be quite extreme so that the
+        null is rejected, suggesting an significant derivation from true
+        mean.

@@ -15,175 +15,197 @@ library(ggplot2)
 ### Problem 2
 #### Import Data
 ```{r}
-urlfile = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
-homi = read_csv(url(urlfile))
+homi = read_csv("C:/Users/HW/Desktop/courses/fall 2022/data science/hw/hw5/homicide-data.csv")
 ```
 The raw data contains `r nrow(homi)` observations of `r ncol(homi)` variables, the names of the variable are `r names(homi)`.
 
-#### Create a New Variable
+#### Create "city_state" variable
 ```{r}
 homi = homi %>%
-  mutate(city_state = paste(city,state,sep = ","))
+  janitor::clean_names() %>%
+  mutate(city_state = str_c(city, state, sep = ","))
 ```
 
 #### Summary within Cities
 ```{r}
 homi_table = 
   homi %>%
-  group_by(city_state, disposition) %>% 
-  summarize(n = n()) %>%
-  pivot_wider(names_from = disposition, values_from = n) %>%
-  select(-"Closed by arrest") %>%
-  rename(
-    "Total Number of Homicides" = "Open/No arrest",
-    "Number of Unsolved Homicides" = "Closed without arrest"
-    ) %>%
-  drop_na()
-  
-knitr::kable(homi_table) #How to deal with NAs
+  mutate(result = case_when(
+      disposition == "Closed without arrest" ~ "unsolved",
+      disposition == "Open/No arrest"        ~ "unsolved",
+      disposition == "Closed by arrest"      ~ "solved"
+  )) %>% 
+  group_by(city_state) %>% 
+  summarize(n = n(),
+            unsolved = sum(result == "unsolved")) %>%
+  filter(city_state != "Tulsa,AL")
+
+knitr::kable(homi_table)
 ```
 
-#### Estimation of the Proportion of Homicides Unsolved
+#### Proportion Test of Baltimore
 ```{r}
-prop_baltimore = prop.test(x = 152, n = 1673)
+baltimore_df =
+  homi_table %>%
+  filter(city_state == "Baltimore,MD")
 
-esti_and_CI_baltimore = 
-  broom::tidy(prop_baltimore) %>%
-  select(1,5,6) %>%
-  mutate(
-    CI = paste(round(conf.low,3), round(conf.high, 3), sep = ","),
-    CI = paste("[", CI, "]"),
-    estimate = round(estimate, 3)) %>%
-  select(estimate, CI) 
+baltimore_test = 
+  prop.test(
+    x = baltimore_df %>% pull(unsolved), 
+    n = baltimore_df %>% pull(n)) %>%
+  broom::tidy()
 
-esti_and_CI_baltimore 
+baltimore_test %>% select(estimate, starts_with("conf"))
 ```
-The estimated proportion is `r esti_and_CI_baltimore[[1]]`, the 95% confidence interval is `r esti_and_CI_baltimore[[2]]`.
+The estimated proportion is `r baltimore_test %>% pull(estimate)`, the 95% confidence interval is [`r baltimore_test %>% select(starts_with("conf"))`].
 
-#### Iterate over Cities
-  - define a function to generate estimated proportion and CI for each city
+#### Proportion Test across Cities
+  - Define a function 
 ```{r}
-esti_and_CI = function(x,n){
-  prop_test_result = prop.test(x,n)
+city_test = function(x,n){
+  prop.test(x,n) %>%
   broom::tidy(prop_test_result) %>%
-    select(1,5,6) %>%
-    mutate(
-    CI = paste(round(conf.low,3), round(conf.high, 3), sep = ","),
-    CI = paste("[", CI, "]"),
-    estimate = round(estimate, 3)) %>%
-  select(estimate, CI)
-}
+    select(estimate, starts_with("conf"))}
 ```
 
-  - build a tibble to store the result
+  - Iterate over each city
 ```{r}
-homi_df = 
-  tibble(
-    name = homi_table$city_state,
-    samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
-    samp2 = as.list(homi_table$`Total Number of Homicides`),
-    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[1]]),
-    conf_int = map2(.x = samp1, .y = samp2, ~esti_and_CI(x = .x, n = .y)[[2]])
-    ) %>%
-  select(name, esti_p, conf_int)
-homi_df
-unnest(homi_df)
+result_df = 
+  homi_table %>% 
+  mutate(summary = map2(as.list(homi_table$unsolved), as.list(homi_table$n), city_test)) %>%
+  select(city_state, summary) %>%
+  unnest()
+
+result_df
 ```
 
-  - plot
+ - plot
 ```{r}
-#define a new function to separate the upper and lower limit of CIs
-esti_and_CI_plot = function(x,n){
-  prop_test_result = prop.test(x,n)
-  broom::tidy(prop_test_result) %>%
-    select(1,5,6) %>%
-    mutate(
-    conf.low = round(conf.low,3),
-    conf.high = round(conf.high,3),
-    estimate = round(estimate, 3)) %>%
-  select(estimate, conf.low, conf.high)}
-
-#store the estimated_portion, upper and lower limit in a new tibble
-homi_df_plot = 
-  tibble(
-    name = homi_table$city_state,
-    samp1 = as.list(homi_table$`Number of Unsolved Homicides`),
-    samp2 = as.list(homi_table$`Total Number of Homicides`),
-    esti_p = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[1]]),
-    conf_low = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[2]]),
-    conf_high = map2(.x = samp1, .y = samp2, ~esti_and_CI_plot(x = .x, n = .y)[[3]])
-    ) %>%
-  select(name, esti_p, conf_low, conf_high)
-```
-
-```{r}
-# generate the plot
-ggplot(unnest(homi_df_plot), aes(x = reorder(name,esti_p), y = esti_p)) +
+ggplot(result_df, aes(x = reorder(city_state, estimate), y = estimate)) +
   geom_point() +
   theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
-  geom_errorbar(aes(ymin = conf_low, ymax = conf_high))
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  xlab("Estimated Proportion") +
+  ylab("Confidence Interval")
 ```
 
 ### Problem 3
-#### Set design elements
+#### Generate function that returns mu_hat and p.value
 ```{r}
-sim_muhat_pval = function(samp_size = 30, mu, sigma = 5) {
-  
+sim_mu_pval = function(samp_size = 30, mu, sigma = 5) {
   sim_data = tibble(
-    x = rnorm(n = samp_size, mean = mu, sd = sigma),
-    )
-  
+    x = rnorm(n = samp_size, mean = mu, sd = sigma),)
   sim_data %>% 
     t.test(conf.level = 0.95) %>%
     broom::tidy() %>%
-    select(1,3)}
+    select(estimate, p.value)}
 ```
 
+#### Simulation of "mu = 0"
 ```{r}
 sim_results_df = 
   expand_grid(
     mean_null = 0,
-    iter = 1:1000
-  ) %>% 
+    iter = 1:5000) %>% 
   mutate(
-    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+    estimate_df = map(.x = mean_null, ~sim_mu_pval(mu = .x))
   ) %>% 
   unnest(estimate_df)
 
 sim_results_df
 ```
 
+#### Simulation of "mu = {1,2,3,4,5,6}"
 ```{r}
+mu_true = c(1,2,3,4,5,6)
+
 sim_results_df2 = 
   expand_grid(
-    mean_null = c(1,2,3,4,5,6),
-    iter = 1:1000
+    mean_null = mu_true,
+    iter = 1:5000
   ) %>% 
   mutate(
-    estimate_df = map(.x = mean_null, ~sim_muhat_pval(mu = .x))
+    estimate_df = map(.x = mean_null, ~sim_mu_pval(mu = .x))
   ) %>% 
   unnest(estimate_df)
+
 sim_results_df2
 ```
 
+#### Plot showing the proportion of times rejected & mean of estimate
+
+  - Function that calculates the "rejection proportion"
 ```{r}
-prop= function(mean_input) {
+prop = function(mean_input) {
   sim_data = 
     sim_results_df2 %>%
     filter(mean_null == mean_input)
-  length(sim_data$p.value[sim_data$p.value < 0.05])/1000
+  length(sim_data$p.value[sim_data$p.value < 0.05])/5000
 }
+```
 
+  - Plot
+```{r}
 plot1 = 
-  unnest(tibble( mean_input = c(1,2,3,4,5,6), prop = map(c(1,2,3,4,5,6), prop))) %>%
-  ggplot(aes(x = mean_input, y = prop)) + geom_point()
+  unnest(tibble( mu_true, prop = map(mu_true, prop))) %>%
+  ggplot(aes(x = mu_true , y = prop)) + 
+  geom_point(size = 3, color = "red") +
+  labs(
+    x = "true mu",
+    y = "proportion of rejected",
+    title = "The Proportion of Times Rejectect across True mu"
+  )
 
 plot1
 ```
 
-```{r}
+* Description:
+  - There is a positive relationship between effect size and power. 
+  - The power is approximately equal to one when mu is 4, 5, or 6, suggesting the null was almost rejected 100% of times.
 
-ggplot(sim_results_df2, aes(x = mean_null, y = estimate)) +
-  geom_point()
+#### Plot showing the average estimate of mu_hat
+  - Function that calculates the average estimates for the whole sample
+```{r}
+esti = function(mean_input) {
+  sim_data = 
+    sim_results_df2 %>%
+    filter(mean_null == mean_input)
+  mean(sim_data$estimate)
+}
 ```
 
+  - Sample for which the null was rejected
+```{r}
+samp_rej = 
+  sim_results_df2 %>%
+  filter(p.value < 0.05)
+```
+  
+  - Function that calculates the average estimates for the sample rejected
+```{r}
+esti2 = function(mean_input) {
+  sim_data = 
+    samp_rej %>%
+    filter(mean_null == mean_input)
+  mean(sim_data$estimate) }
+```
+
+  - Plot2
+```{r}
+plot2 = 
+  unnest(tibble(mean_input = mu_true, esti1 = map(mu_true, esti), esti2 = map(mu_true, esti2))) %>% 
+  ggplot(aes(x = mean_input, y = esti1)) + 
+  geom_point(color = "steelblue", size = 3, alpha = 0.7) +
+  geom_point(aes(x = mean_input, y = esti2), color = "red", size = 3, alpha = 0.7) +
+  labs(
+    x = "true mu",
+    y = "average of estimated mu",
+    title = "Average of Estimated mu across True mu"
+  )
+plot2
+```
+
+* Description:
+  - The average mu_hat for "rejected samples" is somehow greater than true mu, while the two almost equal when true mean is 4, 5 or 6. 
+  - When true mu is 4, 5, or 6: the power is approximately equal to 1, which means almost all samples are rejected(correctly), suggesting average estimate of rejected samples is extremely close to the true mean;
+  - When true mu is 1, 2, or 3: the power is observably smaller than 1. The estimated values should be quite extreme so that the null is rejected, suggesting an significant derivation from true mean.
